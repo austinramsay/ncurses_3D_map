@@ -1,0 +1,168 @@
+#include <iostream>
+#include <ncurses.h>
+#include <math.h>
+#include <string>
+
+#define WALL_COLOR 1
+#define FLOOR_COLOR 2
+#define CEILING_COLOR 3
+
+using namespace std;
+
+
+// Player X, Y position and viewing angle
+float player_x = 8.0f;
+float player_y = 8.0f;
+float player_a = 0.0f;
+
+// Map design - # represents wall and '.' for empty space
+int map_height = 32;
+int map_width = 32;
+float map_depth = 32.0;
+
+// Field of view
+float fov = 3.14159 / 4.0;
+
+// Map
+string map;
+
+/*
+ * main()
+ */
+int main() {
+	
+	// Initialize ncurses
+	initscr();
+	curs_set(0);
+	//timeout(0);
+	cbreak();	// one char at a time
+	noecho();	// don't echo char inputs
+	clear();
+
+	start_color();
+	use_default_colors();
+	init_pair(WALL_COLOR, COLOR_BLUE, COLOR_BLUE);
+	init_pair(CEILING_COLOR, COLOR_BLACK, COLOR_BLACK);
+	init_pair(FLOOR_COLOR, COLOR_BLACK, COLOR_WHITE);
+
+	int max_rows, max_cols;
+	max_rows = LINES - 1;
+	max_cols = COLS - 1;
+
+	// Write map layout
+	map += "################################";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "#..............................#";
+	map += "################################";
+
+	// mvaddch(int y, int x, const chtype ch);
+	// row, column, char
+
+	// Game loop
+	while (1) {
+
+		// Get player input
+		char input = getch();
+		if (input == 'a') {
+			player_a -= (0.1f); 
+		} else if (input == 'd') {
+			player_a += (0.1f);
+		} else if (input == 'w') {
+			player_x += sinf(player_a) * 1.0f;
+			player_y += cosf(player_a) * 1.0f;
+		} else if (input == 's') {
+			player_x -= sinf(player_a) * 1.0f;
+			player_y -= cosf(player_a) * 1.0f;
+		}
+
+		// For each column on the screen
+		// Or, for each ray that needs to be drawn calculated from the players angle and FOV
+		for (int cur_col = 0; cur_col < max_cols; cur_col++) {
+			
+			// For each column, calculate the projected ray angle into world space
+			// ray_angle is calculated in radians since FOV and player angle are in rads
+			// Calculates the starting angle, and then adds the offset angle by finding the point
+			// in which we are in the possible view sweep, and converting to radians by * FOV. 
+			float ray_angle = (player_a - fov / 2.0f) + ((float)cur_col / (float)max_cols) * fov;
+
+			// Calculate the i and j unit vectors for this ray angle
+			// Using sin and cos, we can find the missing triangle values to hit the 1 unit outwards
+			// in the direction of our calculated ray angle.
+			float x_vec = sinf(ray_angle);
+			float y_vec = cosf(ray_angle);
+
+			// Boundary conditions, increment distance to wall until wall is hit
+			float d_wall = 0;
+			bool hit_wall = false;
+
+			while (!hit_wall && d_wall < map_depth) {
+
+				d_wall += 0.05f;
+				
+				int test_x = (int)(player_x + x_vec * d_wall);
+				int test_y = (int)(player_y + y_vec * d_wall);
+
+				// Check to see if this ray is out of bounds
+				if (test_x < 0 || test_x >= map_width || test_y < 0 || test_y >= map_height) {
+
+					hit_wall = true;
+					d_wall = map_depth;
+
+				} else {
+
+					// The ray is inbounds, test to see if the ray cell is a wall block
+					// Convert test points to array index
+					if (map[test_y * map_width + test_x] == '#') {
+						hit_wall = true;
+					}
+				}
+			}
+
+			// Calculate distance to ceiling and floor
+			int ceiling = (float)(max_rows / 2.0) - max_rows / ((float)d_wall);
+			int floor = max_rows - ceiling;
+
+			for (int cur_row = 0; cur_row < max_rows; cur_row++) {
+
+				if (cur_row < ceiling) {
+
+					// Must be ceiling
+					attron(COLOR_PAIR(CEILING_COLOR));
+					mvaddch(cur_row, cur_col, ACS_CKBOARD);
+					attroff(COLOR_PAIR(CEILING_COLOR));
+
+				} else if (cur_row >= ceiling && cur_row <= floor) {
+					
+					// Must be a wall
+					attron(COLOR_PAIR(WALL_COLOR));
+					mvaddch(cur_row, cur_col, ACS_CKBOARD);
+					attroff(COLOR_PAIR(WALL_COLOR));
+
+				} else {
+
+					// Neither ceiling nor wall, must be floor
+					attron(COLOR_PAIR(FLOOR_COLOR));
+					mvaddch(cur_row, cur_col, ACS_CKBOARD);
+					attroff(COLOR_PAIR(FLOOR_COLOR));
+
+				}
+
+				refresh();
+			}
+		}
+	}
+
+	return 0;
+}
