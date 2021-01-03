@@ -1,4 +1,0 @@
-#!/bin/bash
-
-g++ main.cpp frame_stats.cpp -lncurses -ltinfo -lpanel -o map_test
-./map_test

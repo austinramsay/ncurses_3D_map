@@ -3,18 +3,21 @@
 #include <panel.h>
 #include <math.h>
 #include <string>
+#include <vector>
+#include <utility>
 #include "frame_stats.hpp"
 
 #define WALL_LIGHT 1
 #define WALL_MED 2
 #define WALL_DARK 3
-#define FLOOR_LIGHT 4
-#define FLOOR_MED 5
-#define FLOOR_DARK 6
-#define CEILING_LIGHT 7
-#define CEILING_MED 8
-#define CEILING_DARK 9
-#define STAT_COLOR 10
+#define WALL_BOUNDARY 4
+#define FLOOR_LIGHT 5
+#define FLOOR_MED 6
+#define FLOOR_DARK 7
+#define CEILING_LIGHT 8
+#define CEILING_MED 9
+#define CEILING_DARK 10
+#define STAT_COLOR 11
 
 using namespace std;
 
@@ -56,6 +59,7 @@ int main() {
 	init_pair(WALL_LIGHT, COLOR_BLUE, COLOR_BLUE);
 	init_pair(WALL_MED, COLOR_BLACK, COLOR_BLUE);
 	init_pair(WALL_DARK, COLOR_BLUE, COLOR_BLACK);
+	init_pair(WALL_BOUNDARY, COLOR_BLACK, COLOR_BLACK);
 	init_pair(CEILING_LIGHT, COLOR_WHITE, COLOR_WHITE);
 	init_pair(CEILING_MED, COLOR_BLACK, COLOR_WHITE);
 	init_pair(CEILING_DARK, COLOR_WHITE, COLOR_BLACK);
@@ -73,12 +77,12 @@ int main() {
 	map += "################";
 	map += "#..............#";
 	map += "#..............#";
-	map += "#.....####.#####";
-	map += "#........#.#...#";
-	map += "#........#.#...#";
-	map += "#........#.#####";
-	map += "#........#.....#";
-	map += "#........#######";
+	map += "#.....##...#####";
+	map += "#......#...#...#";
+	map += "#......#...#####";
+	map += "#......#.......#";
+	map += "#......#.......#";
+	map += "#......#########";
 	map += "#..............#";
 	map += "#..............#";
 	map += "#..............#";
@@ -136,6 +140,7 @@ int main() {
 			// Boundary conditions, increment distance to wall until wall is hit
 			float d_wall = 0;
 			bool hit_wall = false;
+			bool boundary = false;
 
 			while (!hit_wall && d_wall < map_depth) {
 
@@ -157,8 +162,33 @@ int main() {
 
 					// The ray is inbounds, test to see if the ray cell is a wall block
 					// Convert test points to array index
-					if (map[test_y * map_width + test_x] == '#') {
+					int test_pos = test_y * map_width + test_x;
+					if (map[test_pos] == '#') {
 						hit_wall = true;
+
+						vector<pair<float, float> > p;	// distance to the perfect corner, and dot product (angle between two vectors)
+
+						// Find perfect corners of the wall
+						// Four corners to try
+						for (int tx = 0; tx < 2; tx++) {
+							for (int ty = 0; ty < 2; ty++) {
+								float vy = (float)test_y + ty - player_y;
+								float vx = (float)test_x + tx - player_x;
+								float d = sqrt((vx * vx) + (vy * vy));
+								float dot_product = (x_vec * vx / d) + (y_vec * vy / d);	// unit vector of our perfect corner of the wall
+								p.push_back(make_pair(d, dot_product));
+							}
+						}
+
+						// Sort pairs from closest to farthest
+						sort(p.begin(), p.end(), [](const pair<float, float> &left, const pair<float, float> &right) { return left.first < right.first; });
+
+						float bound = 0.003;
+						for (int i = 0; i <= 1; i++) {
+							// if (p.at(i).first < 8) {
+								if (acos(p.at(i).second) < bound) boundary = true;
+							// }
+						}
 					}
 				}
 			}
@@ -204,18 +234,24 @@ int main() {
 					
 					// Must be a wall
 					// TODO: must be a better way to write this
-					if (d_wall < map_depth / 3.25f) {	
-						attron(COLOR_PAIR(WALL_LIGHT));
+					if (boundary) { 
+						attron(COLOR_PAIR(WALL_BOUNDARY));
 						mvaddch(cur_row, cur_col, ACS_CKBOARD);
-						attroff(COLOR_PAIR(WALL_LIGHT));
-					} else if (d_wall < map_depth / 1.3f) {
-						attron(COLOR_PAIR(WALL_MED));
-						mvaddch(cur_row, cur_col, ACS_CKBOARD);
-						attroff(COLOR_PAIR(WALL_MED));
+						attroff(COLOR_PAIR(WALL_BOUNDARY));
 					} else {
-						attron(COLOR_PAIR(WALL_DARK));
-						mvaddch(cur_row, cur_col, ACS_CKBOARD);
-						attroff(COLOR_PAIR(WALL_DARK));
+						if (d_wall < map_depth / 3.25f) {	
+							attron(COLOR_PAIR(WALL_LIGHT));
+							mvaddch(cur_row, cur_col, ACS_CKBOARD);
+							attroff(COLOR_PAIR(WALL_LIGHT));
+						} else if (d_wall < map_depth / 1.3f) {
+							attron(COLOR_PAIR(WALL_MED));
+							mvaddch(cur_row, cur_col, ACS_CKBOARD);
+							attroff(COLOR_PAIR(WALL_MED));
+						} else {
+							attron(COLOR_PAIR(WALL_DARK));
+							mvaddch(cur_row, cur_col, ACS_CKBOARD);
+							attroff(COLOR_PAIR(WALL_DARK));
+						}
 					}
 
 				} else {
